@@ -1,0 +1,13 @@
+version: '3.0'
+
+services:
+    ab2p:
+        build: .
+        ports:
+            - 3000:3000
+        environment: 
+            HOSTNAME: http://192.168.1.112:3000 # Changeme
+            BASEDIR: /audiobooks
+        volumes:
+        #    - /my/audiobook/location/Audiobook 1:/audiobooks/Audiobook 1
+        #    - /my/audiobook/location/Audiobook 2:/audiobooks/Audiobook 2
