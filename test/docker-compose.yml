@@ -1,0 +1,15 @@
+version: '3.0'
+
+services:
+    ab2p:
+        build: ..
+        environment: 
+            HOSTNAME: http://ab2p:3000
+            BASEDIR: /audiobooks
+        volumes:
+            - ./test_data/AudioBook1:/audiobooks/Audiobook1
+            - ./test_data/AudioBook2:/audiobooks/Audiobook2
+
+    test:
+        build: .
+           

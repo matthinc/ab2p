@@ -1,76 +1,112 @@
 #!/usr/bin/env python3
+"""Generates Podcast rss-feeds and a Caddyfile based on the content
+(sub-directories and mp3 files) of the given 'BASEDIR'"""
+
 import os
+import sys
 from natsort import natsorted
+from jinja2 import Environment, FileSystemLoader
 
-def get_sub_directories(dir):
-    entries = os.scandir(dir)
-    # Remove all entries that are not directories
-    dirs = [dir for dir in entries if dir.is_dir() and not dir.name.startswith(".")]
-    # Return the names of the sub directories in natural order
-    return natsorted([dir.name for dir in dirs])
+def get_sub_directories(directory):
+    """Returns all not-hidden sub-dirs of directory"""
 
-def get_mp3_files(dir):
-    entries = os.scandir(dir)
-    # Remove all entries that are not directories
-    audioFiles = [f for f in entries if f.is_file() and f.name.endswith(".mp3")]
+    entries = os.scandir(directory)
+    # Remove all entries that are not directoryectories
+    directorys = [directory for directory in entries
+        if directory.is_dir() and not directory.name.startswith(".")]
+    # Return the names of the sub directoryectories in natural order
+    return natsorted([directory.name for directory in directorys])
+
+def get_mp3_files(directory):
+    """Returns all .mp3 files within directory"""
+
+    entries = os.scandir(directory)
+    # Remove all entries that are not directoryectories
+    audio_files = [f for f in entries if f.is_file() and f.name.endswith(".mp3")]
     # Return filenames in natural order
-    return natsorted([f.name for f in audioFiles])
+    return natsorted([f.name for f in audio_files])
 
-def get_jpeg_files(dir):
-    entries = os.scandir(dir)
-    # Remove all entries that are not directories
-    jpegFiles = [f for f in entries if f.is_file() and f.name.endswith(".jpg")]
-    # Return filenames in natural order
-    return natsorted([f.name for f in jpegFiles])
-
-# /a/b/c -> /a/b/c/
 def end_with_slash(url):
+    """Makes sure the given url or filename ends witn a slash"""
+
     if not url.endswith("/"):
         return url + "/"
-    else:
-        return url
 
-def get_full_dir(base, dir):
-    return end_with_slash(base) + dir
+    return url
 
-def scan_for_mp3(base, dir, files):
+def get_full_directory(base, directory):
+    """Concatenates base and directory to a absolute path"""
+
+    return end_with_slash(base) + directory
+
+def scan_for_mp3(base, directory, files):
+    """Scans the given directory for mp3 files recursively"""
+
     # Add mp3 files first...
-    for file in get_mp3_files(get_full_dir(base, dir)):
+    for file in get_mp3_files(get_full_directory(base, directory)):
         files.append({
-            "path": dir + "/" + file,
+            "path": directory + "/" + file,
             "file": file
         })
 
-    # ...Then scan sub directories
-    for sub_dir in get_sub_directories(get_full_dir(base, dir)):
-        scan_for_mp3(base, dir + "/" + sub_dir, files)
+    # ...Then scan sub directoryectories
+    for sub_directory in get_sub_directories(get_full_directory(base, directory)):
+        scan_for_mp3(base, directory + "/" + sub_directory, files)
 
     return files
 
-def feed_for_dir(hostname, base, dir):
+def feed_for_directory(hostname, base, directory):
+    """Generate a podcast rss-feed containing all mp3 files in this directory"""
+
     feed = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    feed += "<rss version=\"2.0\" xmlns:itunes=\"http://www.itunes.com/dtds/podcast-1.0.dtd\" xmlns:atom=\"http://www.w3.org/2005/Atom\">"
+    feed += "<rss version=\"2.0\" xmlns:itunes=\"http://www.itunes.com/dtds/podcast-1.0.dtd\">"
     feed += "<channel>"
-    feed += "<title>" + dir + "</title>"
-    feed += "<description>" + dir + "</description>"
+    feed += "<title>" + directory + "</title>"
+    feed += "<description>" + directory + "</description>"
     feed += "<itunes:type>episodic</itunes:type>"
 
-    for file in scan_for_mp3(base, dir, []):
+    for file in scan_for_mp3(base, directory, []):
         feed += "<item>"
         feed += "<title>" + file["file"] + "</title>"
-        feed += "<enclosure url=\"" + end_with_slash(hostname) + file["path"] + "\" type=\"audio/mpeg\" />"
+        feed += "<enclosure url=\""
+        feed += end_with_slash(hostname) + file["path"] + "\" type=\"audio/mpeg\" />"
         feed += "</item>"
-    
+
     feed += "</channel>"
     feed += "</rss>"
 
     # Write feed to xml file
-    with open(get_full_dir(base, dir)+ ".xml", "w") as f:
-        f.write(feed)
+    with open(get_full_directory(base, directory)+ ".xml", "w") as file:
+        file.write(feed)
 
-def import_dirs(hostname, base):
+def import_directorys(hostname, base):
+    """Generate rss feeds for all sub-directories in the given base path"""
+
     for entry in os.scandir(base):
         if entry.is_dir():
-            feed_for_dir(hostname, base, entry.name)
+            feed_for_directory(hostname, base, entry.name)
 
-import_dirs(os.getenv("HOSTNAME"), os.getenv("BASEDIR"))
+def render_caddyfile(hostname, basedirectory):
+    """Renders the j2 template to a Caddyfile"""
+
+    jinja_env = Environment(loader=FileSystemLoader('.'))
+    template = jinja_env.get_template(name = "./Caddyfile.j2")
+    result = template.render(hostname = hostname, basedir = basedirectory)
+
+    with open("Caddyfile", "w") as file:
+        file.write(result)
+
+def main():
+    """Runs the import script"""
+
+    hostname = os.getenv("HOSTNAME")
+    basedirectory = os.getenv("BASEDIR")
+
+    if (not hostname) or (not basedirectory):
+        sys.exit("Please specify the 'HOSTNAME' and 'BASEDIR' environment variable.")
+
+    import_directorys(hostname, basedirectory)
+    render_caddyfile(hostname, basedirectory)
+
+if __name__ == "__main__":
+    main()
